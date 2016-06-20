@@ -21,7 +21,7 @@ def isSQLite3(filename):
         return False
     with open(filename, 'rb') as fd:
         header = fd.read(100)
-    return header[0:16] == 'SQLite format 3\x00'
+    return header[0:16] == b'SQLite format 3\x00'
 
 
 def chunks(l, n=8):
