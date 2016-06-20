@@ -55,6 +55,9 @@ def job(key):
 if isSQLite3('s3LogDB.db'):
     conn = sqlite3.connect('s3LogDB.db')
     cur = conn.cursor()
+    cur.execute('''SELECT KEY FROM MARKER ORDER BY TIMESTAMP DESC LIMIT 1''')
+    mark = cur.fetchone()
+
 else:
     conn = sqlite3.connect('s3LogDB.db')
     cur = conn.cursor()
@@ -63,20 +66,28 @@ else:
     cur.execute('''CREATE TABLE marker(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, timestamp NUMERIC)''')
     conn.commit()
 
-listOfKeys = [item.key for item in bucket.objects.all()]
-cur.executemany('INSERT INTO filelist VALUES(null, ?)', list(zip(listOfKeys, )))
-cur.execute('INSERT INTO marker VALUES(null, :key, :timestamp)', {'key': listOfKeys[-1], 'timestamp': datetime.now().timestamp()})
-conn.commit()
+if type(mark) is tuple:
+    listOfKeys = [item.key for item in bucket.objects.filter(Marker=mark[0])]
+else:
+    listOfKeys = [item.key for item in bucket.objects.all()]
 
-p = ThreadPool(44)
-compiledLog = []
-compiledLog.extend(p.map(job, listOfKeys))
-p.close()
-compiledLog = [item for sublist in compiledLog for item in sublist]
-compiledLog = filter(None, compiledLog)
+rows2add = str(len(listOfKeys))
 
-cur.executemany('INSERT INTO log VALUES (null, :owner, :bucket, :time, :ip, :requester, :reqid, :operation, :key, :request, :status, :error, :bytes, :size, :totaltime, :turnaround, :referrer, :useragent, :version, :logfile)', compiledLog)
+if rows2add > 0:
+    cur.executemany('INSERT INTO filelist VALUES(null, ?)', list(zip(listOfKeys, )))
+    cur.execute('INSERT INTO marker VALUES(null, :key, :timestamp)', {'key': listOfKeys[-1], 'timestamp': datetime.now().timestamp()})
+    conn.commit()
+    p = ThreadPool(44)
+    compiledLog = []
+    compiledLog.extend(p.map(job, listOfKeys))
+    p.close()
+    compiledLog = [item for sublist in compiledLog for item in sublist]
+    compiledLog = filter(None, compiledLog)
 
-conn.commit()
+    cur.executemany('INSERT INTO log VALUES (null, :owner, :bucket, :time, :ip, :requester, :reqid, :operation, :key, :request, :status, :error, :bytes, :size, :totaltime, :turnaround, :referrer, :useragent, :version, :logfile)', compiledLog)
+
+    conn.commit()
+
 conn.close()
 print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
+print('''Added : %s Records''') % rows2add
