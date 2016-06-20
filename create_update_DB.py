@@ -71,7 +71,7 @@ if type(mark) is tuple:
 else:
     listOfKeys = [item.key for item in bucket.objects.all()]
 
-rows2add = str(len(listOfKeys))
+rows2add = len(listOfKeys)
 
 if rows2add > 0:
     cur.executemany('INSERT INTO filelist VALUES(null, ?)', list(zip(listOfKeys, )))
@@ -90,4 +90,4 @@ if rows2add > 0:
 
 conn.close()
 print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
-print('''Added : %s Records''') % rows2add
+print('''Added : %s Records''') % str(rows2add)
