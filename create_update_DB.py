@@ -1,14 +1,12 @@
 import boto3
 import re
 import sqlite3
-#from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from datetime import datetime
 import requests
 import ipaddress
-import pprint
 
-tcount = 44
+tcount = 44  # Thread variable, 44 seems to work well
 
 start = datetime.now().timestamp()
 
