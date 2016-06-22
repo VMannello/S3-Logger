@@ -4,6 +4,11 @@ import sqlite3
 #from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from datetime import datetime
+import requests
+import ipaddress
+import pprint
+
+tcount = 44
 
 start = datetime.now().timestamp()
 
@@ -40,7 +45,7 @@ def str2dict(s, f):
         return
 
 
-def job(key):
+def getContents(key):
     fileObj = s3.Object(bucket.name, key)
     strs = str(fileObj.get()["Body"].read()).split('\\n')
     group = []
@@ -48,6 +53,22 @@ def job(key):
         if (len(oneLine) > 3):
             group.append(str2dict(oneLine, key))
     return group
+
+
+def ipGeo(ip):
+    thisObj = {'ipString': ip, 'ip': int(ipaddress.IPv4Address(ip)), 'lastUpdate': datetime.now().timestamp()}
+    if (ipaddress.ip_address(ip).is_private):
+        thisObj['org'] = None
+        thisObj['city'] = None
+        thisObj['country'] = None
+        thisObj['region'] = None
+        thisObj['loc'] = None
+        thisObj['postal'] = None
+        thisObj['host'] = 'Private'
+    else:
+        resp = requests.get('http://ipinfo.io/' + thisObj['ipString'] + '/json')
+        thisObj.update(resp.json())
+    return thisObj
 
 
 #Create/Connect Database
@@ -66,6 +87,7 @@ else:
     cur.execute('''CREATE TABLE log(id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT, bucket TEXT, time TEXT, ip TEXT, requester TEXT, reqid TEXT, operation TEXT, key TEXT, request TEXT, status INT, error TEXT, bytes INT, size INT, totaltime INT, turnaround INT, referrer TEXT, useragent TEXT, version TEXT, logfile TEXT)''')
     cur.execute('''CREATE TABLE filelist(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT)''')
     cur.execute('''CREATE TABLE marker(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, timestamp NUMERIC)''')
+    cur.execute('''CREATE TABLE ipInfo(ip INTEGER PRIMARY KEY, ipString TEXT, host TEXT, city TEXT, region TEXT, country TEXT, loc TEXT, org TEXT, postal TEXT, lastUpdate NUMERIC)''')
     conn.commit()
 
 if type(mark) is tuple and len(mark) > 0:
@@ -79,9 +101,9 @@ if rows2add > 0:
     cur.executemany('INSERT INTO filelist VALUES(null, ?)', list(zip(listOfKeys, )))
     cur.execute('INSERT INTO marker VALUES(null, :key, :timestamp)', {'key': listOfKeys[-1], 'timestamp': datetime.now().timestamp()})
     conn.commit()
-    p = ThreadPool(44)
+    p = ThreadPool(tcount)
     compiledLog = []
-    compiledLog.extend(p.map(job, listOfKeys))
+    compiledLog.extend(p.map(getContents, listOfKeys))
     p.close()
     compiledLog = [item for sublist in compiledLog for item in sublist]
     compiledLog = filter(None, compiledLog)
@@ -90,6 +112,22 @@ if rows2add > 0:
 
     conn.commit()
 
-conn.close()
 print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
 print("Added : " + str(rows2add) + " Records")
+
+#Compare ips from logs with ips we've already cataloged, eventually update from timestamp if older than ??
+cur.execute('''SELECT DISTINCT ip FROM log''')
+temp1 = [item[0] for item in iter(cur.fetchall())]
+cur.execute('''SELECT DISTINCT ipString FROM ipInfo''')
+temp2 = [item[0] for item in iter(cur.fetchall())]
+listOfIps = list(set(temp1) - set(temp2))
+
+p = ThreadPool(tcount)
+compiledIPs = p.map(ipGeo, listOfIps)
+p.close()
+
+#brokenn...
+cur.executemany('''INSERT OR IGNORE INTO ipInfo VALUES (:ip, :ipString, :host, :city, :region, :country, :loc, :org, :postal, :lastUpdate)''', compiledIPs)
+conn.commit()
+conn.close()
+print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
