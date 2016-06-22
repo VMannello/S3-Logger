@@ -52,6 +52,8 @@ def job(key):
 
 #Create/Connect Database
 #Need to get last update
+mark = ()
+
 if isSQLite3('s3LogDB.db'):
     conn = sqlite3.connect('s3LogDB.db')
     cur = conn.cursor()
@@ -66,7 +68,7 @@ else:
     cur.execute('''CREATE TABLE marker(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, timestamp NUMERIC)''')
     conn.commit()
 
-if type(mark) is tuple:
+if type(mark) is tuple and len(mark) > 0:
     listOfKeys = [item.key for item in bucket.objects.filter(Marker=mark[0])]
 else:
     listOfKeys = [item.key for item in bucket.objects.all()]
@@ -90,4 +92,4 @@ if rows2add > 0:
 
 conn.close()
 print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
-print('''Added : %s Records''') % str(rows2add)
+print("Added : " + str(rows2add) + " Records")
