@@ -5,6 +5,14 @@ from multiprocessing.dummy import Pool as ThreadPool
 from datetime import datetime
 import requests
 import ipaddress
+from collections import defaultdict
+from os.path import isfile, getsize
+
+# Things to do:
+# Need to add key for ipinfo.io if user has one
+# Need to add update timeframe to refresh IP database
+# Currently the threaded processes use the same number of threads, maybe adjust depending on length of list, have variable be more like "max threads"
+# Add a database to sqlite that has all the computational meterics, threads used, execution speed, etc etc
 
 tcount = 44  # Thread variable, 44 seems to work well
 
@@ -17,7 +25,6 @@ cols = re.compile(r'(?P<owner>\S+) (?P<bucket>\S+) (?P<time>\[[^]]*\]) (?P<ip>\S
 
 def isSQLite3(filename):
     #Check if database exists
-    from os.path import isfile, getsize
     if not isfile(filename):
         return False
     if getsize(filename) < 100:
@@ -54,18 +61,15 @@ def getContents(key):
 
 
 def ipGeo(ip):
-    thisObj = {'ipString': ip, 'ip': int(ipaddress.IPv4Address(ip)), 'lastUpdate': datetime.now().timestamp()}
+    thisObj = defaultdict(lambda: None)
+    thisObj['ipString'] = ip
+    thisObj['lastUpdate'] = datetime.now().timestamp()
     if (ipaddress.ip_address(ip).is_private):
-        thisObj['org'] = None
-        thisObj['city'] = None
-        thisObj['country'] = None
-        thisObj['region'] = None
-        thisObj['loc'] = None
-        thisObj['postal'] = None
-        thisObj['host'] = 'Private'
+        thisObj['hostname'] = 'Private'
     else:
         resp = requests.get('http://ipinfo.io/' + thisObj['ipString'] + '/json')
         thisObj.update(resp.json())
+    thisObj['ip'] = int(ipaddress.IPv4Address(ip))
     return thisObj
 
 
@@ -85,7 +89,7 @@ else:
     cur.execute('''CREATE TABLE log(id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT, bucket TEXT, time TEXT, ip TEXT, requester TEXT, reqid TEXT, operation TEXT, key TEXT, request TEXT, status INT, error TEXT, bytes INT, size INT, totaltime INT, turnaround INT, referrer TEXT, useragent TEXT, version TEXT, logfile TEXT)''')
     cur.execute('''CREATE TABLE filelist(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT)''')
     cur.execute('''CREATE TABLE marker(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, timestamp NUMERIC)''')
-    cur.execute('''CREATE TABLE ipInfo(ip INTEGER PRIMARY KEY, ipString TEXT, host TEXT, city TEXT, region TEXT, country TEXT, loc TEXT, org TEXT, postal TEXT, lastUpdate NUMERIC)''')
+    cur.execute('''CREATE TABLE ipInfo(ip INTEGER PRIMARY KEY, ipString TEXT, hostname TEXT, city TEXT, region TEXT, country TEXT, loc TEXT, org TEXT, postal TEXT, lastUpdate NUMERIC)''')
     conn.commit()
 
 if type(mark) is tuple and len(mark) > 0:
@@ -110,7 +114,7 @@ if rows2add > 0:
 
     conn.commit()
 
-print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
+print("Elapsed Time : " + str(datetime.now().timestamp()-start))
 print("Added : " + str(rows2add) + " Records")
 
 #Compare ips from logs with ips we've already cataloged, eventually update from timestamp if older than ??
@@ -120,12 +124,13 @@ cur.execute('''SELECT DISTINCT ipString FROM ipInfo''')
 temp2 = [item[0] for item in iter(cur.fetchall())]
 listOfIps = list(set(temp1) - set(temp2))
 
-p = ThreadPool(tcount)
-compiledIPs = p.map(ipGeo, listOfIps)
-p.close()
+if (len(listOfIps) > 0):
+    p = ThreadPool(tcount)
+    compiledIPs = p.map(ipGeo, listOfIps)
+    p.close()
+    cur.executemany('''INSERT OR IGNORE INTO ipInfo VALUES (:ip, :ipString, :hostname, :city, :region, :country, :loc, :org, :postal, :lastUpdate)''', compiledIPs)
+    conn.commit()
 
-#brokenn...
-cur.executemany('''INSERT OR IGNORE INTO ipInfo VALUES (:ip, :ipString, :host, :city, :region, :country, :loc, :org, :postal, :lastUpdate)''', compiledIPs)
-conn.commit()
 conn.close()
-print('''Elapsed Time : ''' + str(datetime.now().timestamp()-start))
+print("Added : " + str(len(listOfIps)) + " new IPs")
+print("Elapsed Time : " + str(datetime.now().timestamp()-start))
