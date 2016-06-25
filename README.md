@@ -1,2 +1,3 @@
 # S3-Logger
-Python S3 Merge log files to sqlite database.
+Read S3 logs and create a SQLite3 database out of them.
+Geolocates IP address with ipinfo.io
