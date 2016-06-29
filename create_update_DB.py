@@ -10,9 +10,10 @@ from os.path import isfile, getsize
 
 # Things to do:
 # Need to add key for ipinfo.io if user has one
-# Need to add update timeframe to refresh IP database
+# Need to add update timeframe to refresh IP database / limit to 1000 per 24hrs if no key / catch 429 to many
 # Currently the threaded processes use the same number of threads, maybe adjust depending on length of list, have variable be more like "max threads"
 # Add a database to sqlite that has all the computational meterics, threads used, execution speed, etc etc
+# Add ability to use a SQL database for bigger datasets
 
 tcount = 44  # Thread variable, 44 seems to work well
 
