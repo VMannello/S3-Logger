@@ -63,8 +63,8 @@ def getContents(key):
 def ipGeo(ip):
     thisObj = defaultdict(lambda: None)
     thisObj['ipString'] = ip
-    thisObj['lastUpdate'] = datetime.now().timestamp()
     if (ipaddress.ip_address(ip).is_private):
+        thisObj['lastUpdate'] = datetime.now().timestamp()
         thisObj['hostname'] = 'Private'
     else:
         resp = requests.get('http://ipinfo.io/' + thisObj['ipString'] + '/json')
@@ -114,8 +114,8 @@ if rows2add > 0:
 
     conn.commit()
 
-print("Elapsed Time : " + str(datetime.now().timestamp()-start))
 print("Added : " + str(rows2add) + " Records")
+print("Elapsed Time : " + str(datetime.now().timestamp()-start))
 
 #Compare ips from logs with ips we've already cataloged, eventually update from timestamp if older than ??
 cur.execute('''SELECT DISTINCT ip FROM log''')
@@ -132,5 +132,6 @@ if (len(listOfIps) > 0):
     conn.commit()
 
 conn.close()
+
 print("Added : " + str(len(listOfIps)) + " new IPs")
 print("Elapsed Time : " + str(datetime.now().timestamp()-start))
